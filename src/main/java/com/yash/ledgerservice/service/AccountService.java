@@ -1,8 +1,10 @@
 package com.yash.ledgerservice.service;
 
+import com.yash.ledgerservice.config.SystemAccounts;
 import com.yash.ledgerservice.dto.AccountResponse;
 import com.yash.ledgerservice.dto.CreateAccountRequest;
 import com.yash.ledgerservice.exception.AccountNotFoundException;
+import com.yash.ledgerservice.exception.BusinessRuleException;
 import com.yash.ledgerservice.model.Account;
 import com.yash.ledgerservice.repository.AccountRepository;
 import org.springframework.stereotype.Service;
@@ -19,7 +21,11 @@ public class AccountService {
 
     @Transactional
     public AccountResponse create(CreateAccountRequest request) {
-        Account account = new Account(request.ownerName().trim(), request.currency());
+        String ownerName = request.ownerName().trim();
+        if (SystemAccounts.FUNDING_OWNER.equalsIgnoreCase(ownerName)) {
+            throw new BusinessRuleException("ownerName '" + ownerName + "' is reserved");
+        }
+        Account account = new Account(ownerName, request.currency());
         return AccountResponse.from(accountRepository.save(account));
     }
 
