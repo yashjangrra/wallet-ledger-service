@@ -12,6 +12,11 @@ public class Transfer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Nullable on purpose: transfers created before Task 5 have no key.
+    // PostgreSQL allows many NULLs in a UNIQUE column.
+    @Column(name = "idempotency_key", unique = true, updatable = false, length = 100)
+    private String idempotencyKey;
+
     @Column(name = "journal_id", nullable = false, updatable = false, unique = true)
     private UUID journalId;
 
@@ -40,7 +45,9 @@ public class Transfer {
         // required by JPA
     }
 
-    public Transfer(UUID journalId, Account fromAccount, Account toAccount, long amount, String currency) {
+    public Transfer(String idempotencyKey, UUID journalId, Account fromAccount,
+                    Account toAccount, long amount, String currency) {
+        this.idempotencyKey = idempotencyKey;
         this.journalId = journalId;
         this.fromAccount = fromAccount;
         this.toAccount = toAccount;
@@ -51,6 +58,7 @@ public class Transfer {
     }
 
     public Long getId() { return id; }
+    public String getIdempotencyKey() { return idempotencyKey; }
     public UUID getJournalId() { return journalId; }
     public Account getFromAccount() { return fromAccount; }
     public Account getToAccount() { return toAccount; }

@@ -21,4 +21,11 @@ public class GlobalExceptionHandler {
         problem.setTitle("Business rule violated");
         return problem;
     }
+
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ProblemDetail handleIdempotencyConflict(IdempotencyConflictException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Idempotency key conflict");
+        return problem;
+    }
 }
