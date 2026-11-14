@@ -39,22 +39,35 @@ public class TransferService {
     @Transactional
     public TransferResult transfer(String idempotencyKey, TransferRequest request) {
 
-        // 1. Have we already processed this key? If yes, replay: do NOT move money again.
+        // 1. Fast path: key already processed -> replay, no locks needed.
         Optional<Transfer> existing = transferRepository.findByIdempotencyKey(idempotencyKey);
         if (existing.isPresent()) {
             return replay(existing.get(), request);
         }
 
-        // 2. First time we see this key: validate and execute.
-        if (request.fromAccountId().equals(request.toAccountId())) {
+        // 2. Cheap validation before we lock anything.
+        Long fromId = request.fromAccountId();
+        Long toId = request.toAccountId();
+        if (fromId.equals(toId)) {
             throw new BusinessRuleException("Cannot transfer to the same account");
         }
 
-        Account from = accountRepository.findById(request.fromAccountId())
-                .orElseThrow(() -> new AccountNotFoundException(request.fromAccountId()));
-        Account to = accountRepository.findById(request.toAccountId())
-                .orElseThrow(() -> new AccountNotFoundException(request.toAccountId()));
+        // 3. Lock BOTH accounts in ascending ID order (deadlock avoidance).
+        Long firstId = fromId < toId ? fromId : toId;
+        Long secondId = fromId < toId ? toId : fromId;
+        Account first = lockAccount(firstId);
+        Account second = lockAccount(secondId);
+        Account from = fromId.equals(firstId) ? first : second;
+        Account to = fromId.equals(firstId) ? second : first;
 
+        // 4. Re-check the key now that we hold the locks: a request with the same key
+        //    may have committed while we were waiting in the queue.
+        Optional<Transfer> committedWhileWaiting = transferRepository.findByIdempotencyKey(idempotencyKey);
+        if (committedWhileWaiting.isPresent()) {
+            return replay(committedWhileWaiting.get(), request);
+        }
+
+        // 5. Business rules.
         if (isSystemAccount(from) || isSystemAccount(to)) {
             throw new BusinessRuleException("System accounts cannot be used in transfers");
         }
@@ -65,13 +78,14 @@ public class TransferService {
 
         long amount = request.amount();
 
-        // CHECK the balance...
+        // 6. CHECK the balance. Safe now: we hold the sender's lock, so nobody else can
+        //    spend from this account until we commit.
         long balance = ledgerEntryRepository.computeBalance(from.getId());
         if (balance < amount) {
             throw new InsufficientFundsException(from.getId(), balance, amount);
         }
 
-        // ...then ACT. The gap between these two is a race condition (fixed in Task 6).
+        // 7. ACT.
         UUID journalId = UUID.randomUUID();
         Transfer transfer = transferRepository.save(
                 new Transfer(idempotencyKey, journalId, from, to, amount, from.getCurrency()));
@@ -89,6 +103,11 @@ public class TransferService {
     public Optional<TransferResult> findReplay(String idempotencyKey, TransferRequest request) {
         return transferRepository.findByIdempotencyKey(idempotencyKey)
                 .map(existing -> replay(existing, request));
+    }
+
+    private Account lockAccount(Long id) {
+        return accountRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new AccountNotFoundException(id));
     }
 
     private TransferResult replay(Transfer existing, TransferRequest request) {

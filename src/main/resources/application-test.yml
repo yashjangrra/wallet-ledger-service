@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ledger_test
+    username: ledger
+    password: ledger
+    hikari:
+      maximum-pool-size: 60
+      connection-init-sql: SET TIME ZONE 'Asia/Kolkata'
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Kolkata
