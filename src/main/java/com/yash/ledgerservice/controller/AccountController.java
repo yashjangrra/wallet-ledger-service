@@ -4,6 +4,7 @@ import com.yash.ledgerservice.dto.AccountResponse;
 import com.yash.ledgerservice.dto.BalanceResponse;
 import com.yash.ledgerservice.dto.CreateAccountRequest;
 import com.yash.ledgerservice.dto.DepositRequest;
+import com.yash.ledgerservice.dto.StatementResponse;
 import com.yash.ledgerservice.service.AccountService;
 import com.yash.ledgerservice.service.LedgerService;
 import jakarta.validation.Valid;
@@ -44,5 +45,14 @@ public class AccountController {
     @GetMapping("/{id}/balance")
     public BalanceResponse balance(@PathVariable("id") Long id) {
         return ledgerService.getBalance(id);
+    }
+
+    @GetMapping("/{id}/statement")
+    public StatementResponse statement(@PathVariable("id") Long id,
+                                       @RequestParam(name = "page", defaultValue = "0") int page,
+                                       @RequestParam(name = "size", defaultValue = "50") int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), 200);   // never return an unbounded list
+        return ledgerService.getStatement(id, safePage, safeSize);
     }
 }
