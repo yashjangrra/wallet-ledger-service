@@ -43,6 +43,16 @@ public interface LedgerEntryRepository extends JpaRepository<LedgerEntry, Long> 
             """)
     long netSumOfAllEntries();
 
+    // Reconciliation check 1b: credits minus debits grouped by currency. Each currency must be 0.
+    @Query("""
+            select e.account.currency,
+                   coalesce(sum(case when e.type = com.yash.ledgerservice.model.EntryType.CREDIT
+                                     then e.amount else -e.amount end), 0L)
+            from LedgerEntry e
+            group by e.account.currency
+            """)
+    List<Object[]> netSumByCurrency();
+
     // Reconciliation check 2: journals whose credits and debits do not cancel out.
     @Query("""
             select e.journalId from LedgerEntry e

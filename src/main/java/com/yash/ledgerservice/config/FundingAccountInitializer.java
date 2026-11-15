@@ -11,7 +11,7 @@ import java.util.List;
 @Component
 public class FundingAccountInitializer implements ApplicationRunner {
 
-    private static final List<String> SUPPORTED_CURRENCIES = List.of("INR");
+    private static final List<String> SUPPORTED_CURRENCIES = List.of("INR", "USD", "EUR", "GBP");
 
     private final AccountRepository accountRepository;
 

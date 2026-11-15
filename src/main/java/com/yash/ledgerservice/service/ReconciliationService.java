@@ -9,7 +9,9 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -32,13 +34,26 @@ public class ReconciliationService {
     public ReconciliationReport run() {
         long totalEntries = ledgerEntryRepository.count();
         long netSum = ledgerEntryRepository.netSumOfAllEntries();
+
+        List<Object[]> currencyRows = ledgerEntryRepository.netSumByCurrency();
+        Map<String, Long> netSumByCurrency = new LinkedHashMap<>();
+        boolean allCurrenciesZero = true;
+        for (Object[] row : currencyRows) {
+            String currency = (String) row[0];
+            Long sum = (Long) row[1];
+            netSumByCurrency.put(currency, sum);
+            if (sum != 0L) {
+                allCurrenciesZero = false;
+            }
+        }
+
         List<UUID> unbalanced = ledgerEntryRepository.findUnbalancedJournals(
                 PageRequest.of(0, MAX_JOURNALS_REPORTED));
         long transfersWithoutTwoEntries = transferRepository.countTransfersWithoutExactlyTwoEntries();
 
-        boolean healthy = netSum == 0 && unbalanced.isEmpty() && transfersWithoutTwoEntries == 0;
+        boolean healthy = allCurrenciesZero && netSum == 0 && unbalanced.isEmpty() && transfersWithoutTwoEntries == 0;
 
         return new ReconciliationReport(
-                healthy, totalEntries, netSum, unbalanced, transfersWithoutTwoEntries, Instant.now());
+                healthy, totalEntries, netSum, netSumByCurrency, unbalanced, transfersWithoutTwoEntries, Instant.now());
     }
 }
