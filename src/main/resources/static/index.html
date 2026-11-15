@@ -1546,7 +1546,8 @@
         1: { id: 1, ownerName: "Alice Johnson", currency: "USD", balanceInMinorUnits: 3000, createdAt: "2026-10-29T11:30:00Z" },
         2: { id: 2, ownerName: "Alice Johnson", currency: "INR", balanceInMinorUnits: 2468050, createdAt: "2026-10-29T11:33:21Z" },
         40: { id: 40, ownerName: "Bob Smith", currency: "INR", balanceInMinorUnits: 1082500, createdAt: "2026-11-08T12:37:19Z" },
-        39: { id: 39, ownerName: "Charlie Davis", currency: "INR", balanceInMinorUnits: 5000000, createdAt: "2026-11-08T12:31:49Z" }
+        39: { id: 39, ownerName: "Charlie Davis", currency: "INR", balanceInMinorUnits: 5000000, createdAt: "2026-11-08T12:31:49Z" },
+        53: { id: 53, ownerName: "Elena Rostova", currency: "EUR", balanceInMinorUnits: 10000, createdAt: "2026-11-15T10:11:49Z" }
       },
       // Ledger Statement Lines per account
       statements: {
@@ -2076,77 +2077,94 @@
       showToast(`Switched active wallet to Account #${currentAccountId}`, 'info');
     }
 
-    async function refreshActiveAccountDropdown() {
-      const select = document.getElementById('quickAccountSelect');
-      const knownDiv = document.getElementById('knownAccountsList');
-      select.innerHTML = '';
-      knownDiv.innerHTML = '';
+    async function getAvailableAccountsList() {
+      let accountsList = [];
 
-      let knownList = [];
-
-      // If in Live API mode, fetch active accounts directly from backend
+      // 1. If in Live API mode, fetch directly from backend /accounts (authoritative source of truth)
       if (!CONFIG.IS_DEMO_MODE) {
         try {
           const liveAccounts = await LedgerAPI.listAccounts();
           if (Array.isArray(liveAccounts) && liveAccounts.length > 0) {
-            liveAccounts.forEach(acc => {
-              if (acc.ownerName !== 'SYSTEM_FUNDING') {
-                knownList.push({ id: Number(acc.id), name: `${acc.ownerName} (${acc.currency})` });
-              }
-            });
+            accountsList = liveAccounts
+              .filter(acc => acc.ownerName !== 'SYSTEM_FUNDING')
+              .map(acc => ({
+                id: Number(acc.id),
+                ownerName: acc.ownerName,
+                currency: (acc.currency || 'USD').toUpperCase(),
+                name: `${acc.ownerName} (${(acc.currency || 'USD').toUpperCase()})`
+              }));
+
+            // Purge and synchronize localStorage with live DB so stale cached personas never linger
+            try {
+              localStorage.setItem('ledger_known_accounts', JSON.stringify(
+                accountsList.map(a => ({ id: a.id, name: a.name }))
+              ));
+            } catch(e) {}
           }
-        } catch(e) {}
+        } catch(e) {
+          console.warn("Could not fetch live accounts list:", e);
+        }
+      } else {
+        // Demo Mode: read from MOCK_DB
+        accountsList = Object.values(MOCK_DB.accounts).map(acc => ({
+          id: Number(acc.id),
+          ownerName: acc.ownerName,
+          currency: (acc.currency || 'USD').toUpperCase(),
+          name: `${acc.ownerName} (${(acc.currency || 'USD').toUpperCase()})`
+        }));
       }
 
-      if (knownList.length === 0) {
-        knownList = [
-          { id: 1, name: 'Alice Johnson (USD)' },
-          { id: 2, name: 'Alice Johnson (INR)' },
-          { id: 40, name: 'Bob Smith (INR)' },
-          { id: 39, name: 'Charlie Davis (INR)' }
+      // 2. Fallback if list is empty (e.g., initial offline state)
+      if (accountsList.length === 0) {
+        accountsList = [
+          { id: 1, ownerName: 'Alice Johnson', currency: 'USD', name: 'Alice Johnson (USD)' },
+          { id: 2, ownerName: 'Alice Johnson', currency: 'INR', name: 'Alice Johnson (INR)' },
+          { id: 40, ownerName: 'Bob Smith', currency: 'INR', name: 'Bob Smith (INR)' },
+          { id: 39, ownerName: 'Charlie Davis', currency: 'INR', name: 'Charlie Davis (INR)' },
+          { id: 53, ownerName: 'Elena Rostova', currency: 'EUR', name: 'Elena Rostova (EUR)' }
         ];
 
-        // Add remembered accounts from localStorage
         try {
           const raw = localStorage.getItem('ledger_known_accounts');
           if (raw) {
             const saved = JSON.parse(raw);
             saved.forEach(acc => {
-              if (!knownList.some(k => Number(k.id) === Number(acc.id))) {
-                knownList.push({ id: Number(acc.id), name: acc.name });
+              if (!accountsList.some(k => Number(k.id) === Number(acc.id))) {
+                const parts = (acc.name || '').split(' (');
+                const owner = parts[0] || 'Account';
+                const curr = (parts[1] || 'USD').replace(')', '');
+                accountsList.push({ id: Number(acc.id), name: acc.name, ownerName: owner, currency: curr });
               }
             });
           }
         } catch(e) {}
-
-        // Add any additional accounts from MOCK_DB if in demo
-        if (CONFIG.IS_DEMO_MODE) {
-          Object.values(MOCK_DB.accounts).forEach(acc => {
-            if (!knownList.some(k => Number(k.id) === Number(acc.id))) {
-              knownList.push({ id: Number(acc.id), name: `${acc.ownerName} (${acc.currency})` });
-            }
-          });
-        }
       }
 
-      if (!window.sessionAccounts) window.sessionAccounts = [];
-      window.sessionAccounts.forEach(acc => {
-        if (!knownList.some(k => Number(k.id) === Number(acc.id))) {
-          knownList.push(acc);
-        }
-      });
-
-      // Ensure current active account is in knownList
-      if (currentAccountId && !knownList.some(k => Number(k.id) === Number(currentAccountId))) {
+      // 3. Ensure current active account is included
+      if (currentAccountId && !accountsList.some(k => Number(k.id) === Number(currentAccountId))) {
         try {
           const acc = await LedgerAPI.getAccount(currentAccountId);
           if (acc && acc.ownerName !== 'SYSTEM_FUNDING') {
-            const entry = { id: acc.id, name: `${acc.ownerName} (${acc.currency})` };
-            knownList.unshift(entry);
-            rememberAccount(acc.id, acc.ownerName, acc.currency);
+            accountsList.unshift({
+              id: Number(acc.id),
+              ownerName: acc.ownerName,
+              currency: (acc.currency || 'USD').toUpperCase(),
+              name: `${acc.ownerName} (${(acc.currency || 'USD').toUpperCase()})`
+            });
           }
         } catch(e) {}
       }
+
+      return accountsList;
+    }
+
+    async function refreshActiveAccountDropdown() {
+      const select = document.getElementById('quickAccountSelect');
+      const knownDiv = document.getElementById('knownAccountsList');
+      select.innerHTML = '';
+      if (knownDiv) knownDiv.innerHTML = '';
+
+      const knownList = await getAvailableAccountsList();
 
       if (knownList.length > 0 && !knownList.some(k => Number(k.id) === Number(currentAccountId))) {
         currentAccountId = Number(knownList[0].id);
@@ -2156,21 +2174,23 @@
       knownList.forEach(k => {
         const opt = document.createElement('option');
         opt.value = String(k.id);
-        opt.textContent = `Account #${k.id} · ${k.name}`;
+        opt.textContent = `Account #${k.id} · ${k.ownerName} (${k.currency})`;
         if (Number(k.id) === Number(currentAccountId)) opt.selected = true;
         select.appendChild(opt);
 
         // Add to modal jump list
-        const jumpBtn = document.createElement('button');
-        jumpBtn.type = 'button';
-        jumpBtn.className = 'btn btn-secondary btn-sm';
-        jumpBtn.style.justifyContent = 'space-between';
-        jumpBtn.innerHTML = `<span><b>Account #${k.id}</b> · ${k.name}</span> <span style="color:var(--brand)">Select →</span>`;
-        jumpBtn.onclick = () => {
-          changeActiveAccount(k.id);
-          closeAccountModal();
-        };
-        knownDiv.appendChild(jumpBtn);
+        if (knownDiv) {
+          const jumpBtn = document.createElement('button');
+          jumpBtn.type = 'button';
+          jumpBtn.className = 'btn btn-secondary btn-sm';
+          jumpBtn.style.justifyContent = 'space-between';
+          jumpBtn.innerHTML = `<span><b>Account #${k.id}</b> · ${k.ownerName} (${k.currency})</span> <span style="color:var(--brand)">Select →</span>`;
+          jumpBtn.onclick = () => {
+            changeActiveAccount(k.id);
+            closeAccountModal();
+          };
+          knownDiv.appendChild(jumpBtn);
+        }
       });
 
       if (select) {
@@ -2337,55 +2357,19 @@
       const select = document.getElementById('transferSenderSelect');
       select.innerHTML = '';
       
-      const knownAccounts = [
-        { id: 1, name: 'Account #1 · Alice Johnson (USD)' },
-        { id: 2, name: 'Account #2 · Alice Johnson (INR)' },
-        { id: 40, name: 'Account #40 · Bob Smith (INR)' },
-        { id: 39, name: 'Account #39 · Charlie Davis (INR)' }
-      ];
+      const accounts = await getAvailableAccountsList();
 
-      // Add remembered accounts from localStorage
-      try {
-        const raw = localStorage.getItem('ledger_known_accounts');
-        if (raw) {
-          const saved = JSON.parse(raw);
-          saved.forEach(acc => {
-            if (!knownAccounts.some(k => Number(k.id) === Number(acc.id))) {
-              knownAccounts.push({ id: Number(acc.id), name: `Account #${acc.id} · ${acc.name}` });
-            }
-          });
-        }
-      } catch(e) {}
-
-      if (CONFIG.IS_DEMO_MODE) {
-        Object.values(MOCK_DB.accounts).forEach(acc => {
-          if (!knownAccounts.some(k => Number(k.id) === Number(acc.id))) {
-            knownAccounts.push({ id: acc.id, name: `Account #${acc.id} · ${acc.ownerName} (${acc.currency})` });
-          }
-        });
-      }
-
-      if (!window.sessionAccounts) window.sessionAccounts = [];
-      window.sessionAccounts.forEach(acc => {
-        if (!knownAccounts.some(k => Number(k.id) === Number(acc.id))) {
-          knownAccounts.push({ id: acc.id, name: `Account #${acc.id} · ${acc.name}` });
-        }
-      });
-
-      if (currentAccountId && !knownAccounts.some(k => Number(k.id) === Number(currentAccountId))) {
-        try {
-          const acc = await LedgerAPI.getAccount(currentAccountId);
-          knownAccounts.unshift({ id: acc.id, name: `Account #${acc.id} · ${acc.ownerName} (${acc.currency})` });
-        } catch(e) {}
-      }
-
-      knownAccounts.forEach(k => {
+      accounts.forEach(k => {
         const opt = document.createElement('option');
         opt.value = String(k.id);
-        opt.textContent = k.name;
+        opt.textContent = `Account #${k.id} · ${k.ownerName} (${k.currency})`;
         if (Number(k.id) === Number(currentAccountId)) opt.selected = true;
         select.appendChild(opt);
       });
+
+      if (currentAccountId && accounts.some(k => Number(k.id) === Number(currentAccountId))) {
+        select.value = String(currentAccountId);
+      }
 
       backToTransferStep1();
       await onSenderAccountChanged();
