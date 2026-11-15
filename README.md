@@ -7,9 +7,11 @@
 [![Idempotency](https://img.shields.io/badge/Idempotency-Header_Key-FF6F00?style=for-the-badge)](https://stripe.com/docs/api/idempotent_requests)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
-A high-integrity, multi-currency financial wallet and ledger system engineered with strict **Double-Entry Bookkeeping**, **Pessimistic Concurrency Controls**, **Deterministic Deadlock Avoidance**, and **Distributed Idempotency Guarantees**.
+A high-integrity, multi-currency financial wallet and ledger system engineered with strict **Double-Entry Bookkeeping**, **Pessimistic Concurrency Controls**, **Deterministic Deadlock Avoidance**, and **Database-Enforced Idempotency**.
 
-Includes a built-in single-page web dashboard, live OpenAPI/Swagger documentation, and automated continuous reconciliation audit verification.
+Includes a built-in single-page web dashboard, live OpenAPI/Swagger documentation, and an on-demand reconciliation audit endpoint.
+
+> **Scope note:** This project was built step by step with AI assistance (Claude) as a way to learn and demonstrate ledger design, concurrency control and idempotency. The single-page dashboard was largely AI-generated; the engineering focus is the backend. It is a learning and portfolio project, not a production payment system.
 
 <p align="center">
   <img src="docs/screenshots/overview.png" alt="Wallet Ledger Service Dashboard" width="95%" />
@@ -18,20 +20,21 @@ Includes a built-in single-page web dashboard, live OpenAPI/Swagger documentatio
 ---
 
 ## 📑 Table of Contents
-- [Architecture & Design Principles](#-architecture--design-principles)
-- [System Architecture Diagram](#-system-architecture-diagram)
-- [Transaction Execution & Locking Sequence](#-transaction-execution--locking-sequence)
-- [Transfer Lifecycle & Idempotency State Machine](#-transfer-lifecycle--idempotency-state-machine)
-- [Entity-Relationship Diagram (ERD)](#-entity-relationship-diagram-erd)
-- [Core Engineering Highlights](#-core-engineering-highlights)
+- [Architecture & Design Principles](#architecture--design-principles)
+- [Transaction Execution & Locking Sequence](#transaction-execution--locking-sequence)
+- [Transfer Lifecycle & Idempotency State Machine](#transfer-lifecycle--idempotency-state-machine)
+- [Entity-Relationship Diagram (ERD)](#entity-relationship-diagram-erd)
+- [Core Engineering Highlights](#core-engineering-highlights)
   - [1. Double-Entry Accounting Invariant](#1-double-entry-accounting-invariant)
   - [2. Deadlock Prevention via Deterministic Lock Ordering](#2-deadlock-prevention-via-deterministic-lock-ordering)
-  - [3. Distributed Idempotency Engine](#3-distributed-idempotency-engine)
+  - [3. Idempotency Engine](#3-idempotency-engine)
   - [4. Multi-Currency Partitioning & Global Auditing](#4-multi-currency-partitioning--global-auditing)
-- [REST API Specification](#-rest-api-specification)
-- [Interactive Web Dashboard](#-interactive-web-dashboard)
-- [Getting Started & Local Setup](#-getting-started--local-setup)
-- [Running Concurrency Verification Tests](#-running-concurrency-verification-tests)
+- [REST API Specification](#rest-api-specification)
+- [Interactive Web Dashboard](#interactive-web-dashboard)
+- [Getting Started & Local Setup](#getting-started--local-setup)
+- [Verification & Test Suite](#comprehensive-verification--test-suite)
+- [Design Trade-offs](#design-trade-offs)
+- [Known Limitations & Roadmap](#known-limitations--roadmap)
 
 ---
 
@@ -55,7 +58,7 @@ flowchart TD
         TransferSvc --> LockMgr["Deterministic Lock Order: min(A,B) -> max(A,B)"]
         TransferSvc --> BalCheck["Real-Time Balance Computation (No Overdraft)"]
         TransferSvc --> DoubleEntry["Atomic Double-Entry Posting (1 DEBIT + 1 CREDIT)"]
-        TransferSvc --> IdempEngine["Idempotency Replay Cache (UNIQUE Key)"]
+        TransferSvc --> IdempEngine["Idempotency Check (UNIQUE Key in DB)"]
     end
 
     subgraph Database Layer ["PostgreSQL (ACID Storage)"]
@@ -169,7 +172,7 @@ erDiagram
         bigint to_account_id FK
         bigint amount "Minor units (cents, paise)"
         varchar currency
-        varchar status "COMPLETED"
+        varchar status "COMPLETED | REVERSED"
         timestamp created_at
     }
 
@@ -216,8 +219,8 @@ Account second = accountRepository.findByIdForUpdate(secondId);
 ```
 Both threads request locks in identical ascending numerical order (`#1` then `#2`), completely eliminating circular wait conditions at the database level.
 
-### 3. Distributed Idempotency Engine
-Network timeouts and client retries commonly cause duplicate financial transactions. This service implements the Stripe-standard `Idempotency-Key` protocol:
+### 3. Idempotency Engine
+Network timeouts and client retries commonly cause duplicate financial transactions. This service supports an `Idempotency-Key` header, modelled on the approach popularised by Stripe's API:
 - **First Request:** Generates and executes the transfer, committing the key and journal within a single transaction. Returns `HTTP 201 Created`.
 - **Replay with Same Key & Payload:** Identifies the existing completed key and returns the identical response with `HTTP 200 OK` and header `Idempotent-Replayed: true`. No duplicate debit occurs.
 - **Replay with Conflicting Payload:** If a previously committed key is reused with different accounts or amounts, the request is rejected immediately with `HTTP 409 Conflict`.
@@ -225,7 +228,7 @@ Network timeouts and client retries commonly cause duplicate financial transacti
 
 ### 4. Multi-Currency Partitioning & Global Auditing
 - **Strict Currency Boundaries:** Accounts support `USD`, `INR`, `EUR`, and `GBP`. Transfers between mismatched currencies are blocked upfront with clear error responses.
-- **Isolated Continuous Reconciliation (`GET /reconciliation`):**
+- **On-Demand Reconciliation (`GET /reconciliation`):**
   Auditing groups ledger entries per currency under `REPEATABLE_READ` snapshot isolation. It confirms:
   1. Every currency's net sum independently equals zero ($\Delta_{\text{USD}} = 0, \Delta_{\text{INR}} = 0$).
   2. Every journal transaction contains perfectly balanced debit and credit entries.
@@ -371,7 +374,7 @@ Real-time computed wallet balance derived dynamically from immutable ledger debi
 #### 2. Transfer Interface & 1-Click Interview Stress Lab
 Enables instant demonstration of core distributed financial system guarantees in 30 seconds:
 * **Send twice (Same Key) 🔁:** Dispatches identical requests with the same idempotency key, immediately rendering the `🔁 Idempotent-Replayed: true (HTTP 200)` badge without double-charging.
-* **Fire 20 transfers at once ⚡:** Concurrently fires 20 transfer threads via `Promise.allSettled` to stress-test pessimistic row-locking (`PESSIMISTIC_WRITE`) and prove zero race conditions or double-spending.
+* **Fire 20 transfers at once ⚡:** Concurrently fires 20 transfer threads via `Promise.allSettled` to stress-test pessimistic row-locking (`PESSIMISTIC_WRITE`) and show that balances stay correct and no money is double-spent.
 * **Simulate Overdraft (422) 🛑 & Currency Mismatch (422) ⚠️:** Surfaces clear, actionable error toasts and validation banners directly from backend RFC 7807 problem details.
 
 <p align="center">
@@ -379,14 +382,14 @@ Enables instant demonstration of core distributed financial system guarantees in
 </p>
 
 #### 3. Account Statement & Running Balance Audit Trail
-An immutable audit journal displaying every posting with unique cryptographic journal UUIDs, precise timestamps, transaction types (`DEBIT` / `CREDIT`), and calculated per-line running balances.
+An immutable audit journal displaying every posting with unique journal UUIDs, precise timestamps, transaction types (`DEBIT` / `CREDIT`), and calculated per-line running balances.
 
 <p align="center">
   <img src="docs/screenshots/statement.png" alt="Account Statement Audit Trail" width="95%" />
 </p>
 
 #### 4. Global Double-Entry Reconciliation & Health Audit
-Automated continuous verification checking that $\sum \text{Credits} - \sum \text{Debits} = 0$ partitioned across every active currency (`USD: $0.00`, `INR: ₹0.00`, `EUR: 0,00 €`), alongside zero unbalanced journals and zero broken transfer legs.
+On-demand verification (run from the dashboard or `GET /reconciliation`) checking that $\sum \text{Credits} - \sum \text{Debits} = 0$ partitioned across every active currency (`USD: $0.00`, `INR: ₹0.00`, `EUR: 0,00 €`), alongside zero unbalanced journals and zero broken transfer legs.
 
 <p align="center">
   <img src="docs/screenshots/reconciliation.png" alt="Reconciliation Audit" width="95%" />
@@ -418,7 +421,7 @@ cd wallet-ledger-service
 docker compose up --build
 ```
 > **Container Highlights:**
-> - Multi-stage build using `eclipse-temurin:17-jre-alpine` (ultra-compact ~179MB image).
+> - Multi-stage build using `eclipse-temurin:17-jre-alpine` (compact JRE-based image).
 > - Runs under an unprivileged user (`ledgeruser`) with container JVM memory constraints (`MaxRAMPercentage=75.0`).
 > - PostgreSQL healthcheck (`pg_isready`) prevents the application from starting until database connections are ready.
 
@@ -486,14 +489,48 @@ The project includes both multi-threaded concurrent race condition testing and f
 ```bash
 ./mvnw test -Dtest=ConcurrentTransferTest
 ```
-- **Parallel Transfer Stress Test:** 20 concurrent threads attempting cross-transfers between accounts. Asserts zero deadlocks occur under high contention.
-- **Overdraft Protection Test:** Simultaneous withdrawal attempts that exceed account balance. Asserts that only valid transfers commit and final computed balance never drops below zero.
-- **Idempotency Key Race Test:** Concurrent requests firing the exact same idempotency key at the same millisecond. Asserts exactly one transaction commits and the other receives the safe replay.
+- **Overdraft Race Test:** 50 threads are released at the same instant (`CountDownLatch`), each trying to transfer ₹800 from an account holding ₹1,000. Asserts that **exactly one** transfer succeeds, no unexpected errors occur, the total money across both accounts is conserved, and the sender's balance never goes negative.
+
+The test is deliberately not `@Transactional`, so every thread commits for real, and it runs against real PostgreSQL (the `test` profile), because locking behaviour is what is being verified.
+
+**Not covered yet (roadmap):** a concurrent opposite-direction transfer test (deadlock check) and a same-`Idempotency-Key` race test. The code paths exist; automated concurrency tests for them are still to be written.
+
+**See the test catch a bug:** temporarily remove `@Lock(PESSIMISTIC_WRITE)` from `findByIdForUpdate` and re-run; the overdraft test should fail by letting more than one transfer through. Restore the lock and it passes again.
 
 ### 3. Run Entire Test Suite
 ```bash
 ./mvnw test
 ```
+
+---
+
+## ⚖️ Design Trade-offs
+
+| Decision | Why | Trade-off |
+|---|---|---|
+| **No stored balance column** | Balance cannot drift from the ledger; single immutable source of truth | Each balance read sums entries |
+| **Pessimistic locking over optimistic** | Money correctness on contended accounts is easier to reason about than retry loops | Lower throughput on very hot accounts |
+| **Ascending lock order** | Eliminates circular wait conditions, preventing database deadlocks | Every transfer path must acquire locks in the same order |
+| **Idempotency key as a DB `UNIQUE` column** | The database ACID engine settles races reliably without distributed locks | Keys never expire |
+| **Integer minor units (paise, cents)** | Prevents floating-point precision and rounding errors | Callers convert to and from display units |
+| **Real PostgreSQL in tests** | Reproduces authentic row-locking and snapshot isolation behavior | Tests require a running database container |
+| **`SYSTEM_FUNDING` account for deposits** | Every journal stays balanced ($\sum = 0$); prevents creating money out of nowhere | One funding account per currency is a contention point |
+
+---
+
+## 🔮 Known Limitations & Roadmap
+
+- **No authentication or authorization.** Anyone who can reach the API can read or move any account.
+- **Balance is computed by summing entries.** Simple and always correct, but $O(N)$ per read. Production systems add periodic balance snapshots.
+- **No cross-currency transfers** (no FX rates or conversion).
+- **Concurrency test coverage is limited** to the overdraft race (see above).
+- **No CI pipeline yet.** Tests are run locally.
+- **Idempotency keys never expire**, and payload comparison covers accounts and amount only.
+- **Deposits are simulated** against an internal funding account; there is no real payment rail.
+- **Single database node:** no replication, sharding or high-availability setup.
+- **No rate limiting, distributed tracing or centralized logging.**
+
+---
 
 ## 📄 License
 This project is open-source and available under the [MIT License](LICENSE).
