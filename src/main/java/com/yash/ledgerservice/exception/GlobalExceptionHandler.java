@@ -15,6 +15,13 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(TransferNotFoundException.class)
+    public ProblemDetail handleTransferNotFound(TransferNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Transfer not found");
+        return problem;
+    }
+
     @ExceptionHandler(BusinessRuleException.class)
     public ProblemDetail handleBusinessRule(BusinessRuleException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());

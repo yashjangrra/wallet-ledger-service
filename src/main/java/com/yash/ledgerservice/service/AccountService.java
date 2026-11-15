@@ -10,6 +10,8 @@ import com.yash.ledgerservice.repository.AccountRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 public class AccountService {
 
@@ -17,6 +19,14 @@ public class AccountService {
 
     public AccountService(AccountRepository accountRepository) {
         this.accountRepository = accountRepository;
+    }
+
+    @Transactional(readOnly = true)
+    public List<AccountResponse> listAll() {
+        return accountRepository.findByOwnerNameNotOrderByIdAsc(SystemAccounts.FUNDING_OWNER)
+                .stream()
+                .map(AccountResponse::from)
+                .toList();
     }
 
     @Transactional

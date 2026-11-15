@@ -43,4 +43,21 @@ public class TransferController {
         }
         return ResponseEntity.status(HttpStatus.CREATED).body(result.response());
     }
+
+    @GetMapping
+    public java.util.List<TransferResponse> listTransfers(
+            @RequestParam(name = "accountId", required = false) Long accountId) {
+        return transferService.listTransfers(accountId);
+    }
+
+    @GetMapping("/{id}")
+    public TransferResponse getById(@PathVariable("id") Long id) {
+        return transferService.getById(id);
+    }
+
+    @PostMapping("/{id}/reverse")
+    public ResponseEntity<TransferResponse> reverse(@PathVariable("id") Long id) {
+        TransferResponse reversed = transferService.reverse(id);
+        return ResponseEntity.ok(reversed);
+    }
 }

@@ -65,5 +65,6 @@ public class Transfer {
     public long getAmount() { return amount; }
     public String getCurrency() { return currency; }
     public TransferStatus getStatus() { return status; }
+    public void markReversed() { this.status = TransferStatus.REVERSED; }
     public Instant getCreatedAt() { return createdAt; }
 }

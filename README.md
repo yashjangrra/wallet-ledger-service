@@ -235,6 +235,7 @@ Network timeouts and client retries commonly cause duplicate financial transacti
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/accounts` | Create an account with an owner and ISO currency (`USD`, `INR`, `EUR`, `GBP`) |
+| `GET` | `/accounts` | List all active accounts (excluding system funding accounts) |
 | `GET` | `/accounts/{id}` | Fetch account metadata |
 | `GET` | `/accounts/{id}/balance` | Compute and return the real-time balance from ledger entries |
 | `POST` | `/accounts/{id}/deposit` | Deposit funds credited against the system funding pool (`SYSTEM_FUNDING`) |
@@ -265,6 +266,9 @@ curl -X POST http://localhost:8080/accounts \
 | Method | Endpoint | Header Required | Description |
 |---|---|---|---|
 | `POST` | `/transfers` | `Idempotency-Key: <UUID>` | Execute an atomic double-entry transfer between accounts |
+| `POST` | `/transfers/{id}/reverse` | None | Post a compensating double-entry journal reversal (fails with 422 if funds spent or already reversed) |
+| `GET` | `/transfers` | None | List recent transfers (optional query parameter `?accountId=<ID>`) |
+| `GET` | `/transfers/{id}` | None | Fetch specific transfer record and current status (`COMPLETED` or `REVERSED`) |
 
 #### Example: Execute a Transfer
 ```bash
@@ -296,6 +300,25 @@ HTTP/1.1 200 OK
 Idempotent-Replayed: true
 Content-Type: application/json
 ```
+
+#### Example: Reverse a Transfer via Compensating Journal
+```bash
+curl -i -X POST http://localhost:8080/transfers/102/reverse
+```
+**Response (`200 OK`):**
+```json
+{
+  "transferId": 103,
+  "journalId": "9c8b7a6d-5e4f-3a2b-1c0d-e2f3a4b5c6d7",
+  "fromAccountId": 46,
+  "toAccountId": 1,
+  "amount": 2500,
+  "currency": "USD",
+  "status": "COMPLETED",
+  "createdAt": "2026-11-15T09:36:00Z"
+}
+```
+*Note: In double-entry accounting, reversals **never mutate or delete** past entries. The reversal issues a new compensating journal transaction (DEBIT recipient, CREDIT original sender). If the recipient has already spent the funds, the endpoint rejects with `422 Unprocessable Entity`.*
 
 ---
 
@@ -330,14 +353,18 @@ curl -X GET http://localhost:8080/reconciliation
 
 ## 💻 Interactive Web Dashboard
 
-The service bundles an interactive single-page dashboard at `http://localhost:8080/index.html`:
+The service bundles a modern, responsive single-page dashboard at `http://localhost:8080/index.html`:
 
-- **Active Wallet Selector:** Quick-switch between multi-currency accounts with state preserved in `localStorage`.
+- **Interview Demo & Stress Lab:**
+  - **"Send twice (Same Key) 🔁":** Dispatches duplicate transfers with the same idempotency key, immediately rendering the `🔁 Idempotent-Replayed: true (HTTP 200)` badge and verifying zero duplicate deductions in 30 seconds.
+  - **"Fire 20 transfers at once ⚡":** Concurrently fires 20 transfer threads, tracks successful completions vs. prevented overdrafts, and executes an automated post-run reconciliation check to prove invariant balance preservation.
+  - **"Simulate Overdraft (422) 🛑":** One-click trigger attempting an overdraft, demonstrating clear HTTP 422 error banners and toasts.
+  - **"Simulate Currency Mismatch (422) ⚠️":** One-click trigger attempting a cross-currency transfer (e.g. USD to INR), demonstrating currency isolation.
+- **Transfer History & Reversals:** Dedicated transfer history table with one-click `Reverse ↩` buttons invoking `POST /transfers/{id}/reverse`.
+- **Active Wallet Selector:** Quick-switch between multi-currency accounts (`USD`, `INR`, `EUR`, `GBP`) with state preserved in `localStorage`.
 - **Live vs. Demo Simulator Toggle:** Switch seamlessly between real PostgreSQL REST API calls and an in-memory double-entry simulator.
-- **Deposit / Add Funds:** Currency-aware preset buttons (`+ $10`, `+ $50`, `+ ₹500`, etc.) based on active account currency.
-- **2-Step Transfer with Idempotency Review:** Inspect the `Idempotency-Key` header and raw payload before dispatching, and run live idempotency retry tests showing the `🔁 Idempotent-Replayed: true` badge.
-- **Real-Time Statement:** Paginated historical entries sorted newest-first with running balances.
-- **Audit Center:** Live status cards confirming ledger balance and per-currency zero-sum integrity.
+- **Dynamic Deposit / Add Funds:** Currency-aware presets (`+ $10`, `+ $50`, `+ ₹500`, etc.) matching the active account's currency.
+- **Audit Center:** Real-time multi-currency double-entry audit cards confirming ledger integrity across all currencies.
 
 ---
 
@@ -358,7 +385,7 @@ docker run --name ledger-postgres \
   -d postgres:16-alpine
 ```
 
-### 2. Configure Database Credentials
+### 2. Configure Database & Flyway Migrations
 Verify `src/main/resources/application.yml`:
 ```yaml
 spring:
@@ -366,12 +393,18 @@ spring:
     url: jdbc:postgresql://localhost:5432/ledger
     username: ledger
     password: ledger
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    locations: classpath:db/migration
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
 server:
   port: 8080
 ```
+> **Fintech Standard:** Database schema is strictly governed by versioned Flyway migrations (`V1__init_schema.sql`, `V2__allow_reversed_transfer_status.sql`). Hibernate runs with `ddl-auto: validate` so that application startup never modifies the production schema without a reviewed migration.
 
 ### 3. Build & Run Application
 ```bash
@@ -390,20 +423,32 @@ cd wallet-ledger-service
 
 ---
 
-## 🧪 Running Concurrency Verification Tests
+## 🧪 Comprehensive Verification & Test Suite
 
-The repository includes a concurrent multi-threaded test suite verifying that race conditions, overdrafts, and deadlocks are prevented:
+The project includes both multi-threaded concurrent race condition testing and full error-path integration testing:
 
+### 1. Run Error-Path Integration Tests (`HTTP 400, 404, 409, 422`)
+```bash
+./mvnw test -Dtest=ErrorPathIntegrationTest
+```
+**14 Automated Error-Path Scenarios Verified:**
+- `400 Bad Request`: Missing `Idempotency-Key` header, zero transfer amount, negative amount, blank owner name, negative deposit.
+- `404 Not Found`: Non-existent account balance lookup, deposit into missing account, missing source/destination account on transfer, non-existent transfer reversal.
+- `409 Conflict`: Idempotency key reused with a conflicting payload (mismatched accounts or amount).
+- `422 Unprocessable Entity`: Same-account transfer attempt, currency mismatch (`USD vs INR`), insufficient funds / overdraft attempt, reversing an already-reversed transfer, reversal when recipient has already spent funds.
+
+### 2. Run Concurrency & Stress Tests
 ```bash
 ./mvnw test -Dtest=ConcurrentTransferTest
 ```
+- **Parallel Transfer Stress Test:** 20 concurrent threads attempting cross-transfers between accounts. Asserts zero deadlocks occur under high contention.
+- **Overdraft Protection Test:** Simultaneous withdrawal attempts that exceed account balance. Asserts that only valid transfers commit and final computed balance never drops below zero.
+- **Idempotency Key Race Test:** Concurrent requests firing the exact same idempotency key at the same millisecond. Asserts exactly one transaction commits and the other receives the safe replay.
 
-### Test Scenarios Covered
-1. **Parallel Transfer Stress Test:** 20 concurrent threads attempting cross-transfers between accounts. Asserts zero deadlocks occur under high contention.
-2. **Overdraft Protection Test:** Simultaneous withdrawal attempts that exceed account balance. Asserts that only valid transfers commit and final computed balance never drops below zero.
-3. **Idempotency Key Race Test:** Concurrent requests firing the exact same idempotency key at the same millisecond. Asserts exactly one transaction commits and the other receives the safe replay.
-
----
+### 3. Run Entire Test Suite
+```bash
+./mvnw test
+```
 
 ## 📄 License
 This project is open-source and available under the [MIT License](LICENSE).

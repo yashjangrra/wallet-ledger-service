@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wallet Ledger Service - Architecture & Technical Specification</title>
+  
+  <!-- Marked Markdown Parser -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+  
+  <!-- Highlight.js for Syntax Highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/java.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/sql.min.js"></script>
+  
+  <!-- KaTeX for Math Equations -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+  <!-- Mermaid.js for Diagrams -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"></script>
+
+  <style>
+    @page {
+      size: A4;
+      margin: 14mm 12mm 14mm 12mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.55;
+      color: #1e293b;
+      background-color: #ffffff;
+      padding: 16px 20px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    h1, h2, h3, h4 {
+      font-weight: 700;
+      color: #0f172a;
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+
+    h1 {
+      font-size: 26px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e2e8f0;
+      margin-top: 6px;
+      margin-bottom: 12px;
+    }
+
+    h2 {
+      font-size: 18px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #e2e8f0;
+      margin-top: 24px;
+      margin-bottom: 10px;
+    }
+
+    h3 {
+      font-size: 15px;
+      margin-top: 18px;
+      margin-bottom: 8px;
+    }
+
+    p, ul, ol {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
+    ul, ol {
+      padding-left: 22px;
+    }
+
+    li {
+      margin-bottom: 3px;
+    }
+
+    hr {
+      height: 1px;
+      padding: 0;
+      margin: 20px 0;
+      background-color: #e2e8f0;
+      border: 0;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11.5px;
+      padding: 2px 5px;
+      margin: 0;
+      background-color: #f1f5f9;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+      color: #0f172a;
+    }
+
+    pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11.5px;
+      line-height: 1.45;
+      background-color: #f8fafc;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    pre code {
+      padding: 0;
+      background-color: transparent;
+      border: none;
+      font-size: 11.5px;
+    }
+
+    table {
+      border-spacing: 0;
+      border-collapse: collapse;
+      margin-top: 4px;
+      margin-bottom: 14px;
+      width: 100%;
+      break-inside: avoid;
+      page-break-inside: avoid;
+      font-size: 12px;
+    }
+
+    table th, table td {
+      padding: 6px 10px;
+      border: 1px solid #cbd5e1;
+    }
+
+    table th {
+      font-weight: 600;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      text-align: left;
+    }
+
+    table tr:nth-child(2n) {
+      background-color: #f8fafc;
+    }
+
+    blockquote {
+      margin: 0 0 14px;
+      padding: 4px 12px;
+      color: #475569;
+      border-left: 3px solid #0284c7;
+      background-color: #f0f9ff;
+      border-radius: 0 4px 4px 0;
+    }
+
+    p img {
+      margin-right: 4px;
+      margin-bottom: 6px;
+      vertical-align: middle;
+    }
+
+    .mermaid-wrapper {
+      margin: 16px 0;
+      padding: 12px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      text-align: center;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .mermaid svg {
+      max-width: 100% !important;
+      height: auto !important;
+      margin: 0 auto;
+    }
+
+    .katex-display {
+      margin: 12px 0 !important;
+      padding: 6px 12px;
+      background: #f0fdf4;
+      border-radius: 6px;
+      border-left: 3px solid #16a34a;
+    }
+
+    @media print {
+      body {
+        padding: 0;
+        max-width: 100%;
+      }
+      .mermaid-wrapper {
+        border: 1px solid #cbd5e1;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="rendered-content">Rendering documentation...</div>
+
+  <script>
+    const rawMarkdownData = "# 🏦 Wallet Ledger Service\n\n[![Java](https://img.shields.io/badge/Java-17%2B-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)](https://openjdk.org/)\n[![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)](https://spring.io/projects/spring-boot)\n[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)\n[![Double-Entry](https://img.shields.io/badge/Accounting-Double--Entry-008080?style=for-the-badge)](https://en.wikipedia.org/wiki/Double-entry_bookkeeping)\n[![Idempotency](https://img.shields.io/badge/Idempotency-Header_Key-FF6F00?style=for-the-badge)](https://stripe.com/docs/api/idempotent_requests)\n[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)\n\nA high-integrity, multi-currency financial wallet and ledger system engineered with strict **Double-Entry Bookkeeping**, **Pessimistic Concurrency Controls**, **Deterministic Deadlock Avoidance**, and **Distributed Idempotency Guarantees**.\n\nIncludes a built-in single-page web dashboard, live OpenAPI/Swagger documentation, and automated continuous reconciliation audit verification.\n\n---\n\n## 📑 Table of Contents\n- [Architecture & Design Principles](#-architecture--design-principles)\n- [System Architecture Diagram](#-system-architecture-diagram)\n- [Transaction Execution & Locking Sequence](#-transaction-execution--locking-sequence)\n- [Transfer Lifecycle & Idempotency State Machine](#-transfer-lifecycle--idempotency-state-machine)\n- [Entity-Relationship Diagram (ERD)](#-entity-relationship-diagram-erd)\n- [Core Engineering Highlights](#-core-engineering-highlights)\n  - [1. Double-Entry Accounting Invariant](#1-double-entry-accounting-invariant)\n  - [2. Deadlock Prevention via Deterministic Lock Ordering](#2-deadlock-prevention-via-deterministic-lock-ordering)\n  - [3. Distributed Idempotency Engine](#3-distributed-idempotency-engine)\n  - [4. Multi-Currency Partitioning & Global Auditing](#4-multi-currency-partitioning--global-auditing)\n- [REST API Specification](#-rest-api-specification)\n- [Interactive Web Dashboard](#-interactive-web-dashboard)\n- [Getting Started & Local Setup](#-getting-started--local-setup)\n- [Running Concurrency Verification Tests](#-running-concurrency-verification-tests)\n\n---\n\n## 🏛 Architecture & Design Principles\n\n```mermaid\nflowchart TD\n    Client[\"Client / Web UI / External Services\"] -->|\"HTTP + Idempotency-Key\"| API[\"REST API Layer (Spring Boot)\"]\n\n    subgraph Service Layer\n        API --> AccountCtrl[\"AccountController\"]\n        API --> TransferCtrl[\"TransferController\"]\n        API --> ReconCtrl[\"ReconciliationController\"]\n        \n        TransferCtrl --> TransferSvc[\"TransferService\"]\n        AccountCtrl --> LedgerSvc[\"LedgerService\"]\n        ReconCtrl --> ReconSvc[\"ReconciliationService\"]\n    end\n\n    subgraph Core Engine Guarantees\n        TransferSvc --> LockMgr[\"Deterministic Lock Order: min(A,B) -> max(A,B)\"]\n        TransferSvc --> BalCheck[\"Real-Time Balance Computation (No Overdraft)\"]\n        TransferSvc --> DoubleEntry[\"Atomic Double-Entry Posting (1 DEBIT + 1 CREDIT)\"]\n        TransferSvc --> IdempEngine[\"Idempotency Replay Cache (UNIQUE Key)\"]\n    end\n\n    subgraph Database Layer [\"PostgreSQL (ACID Storage)\"]\n        LockMgr --> DB_Acc[(\"accounts Table (Pessimistic Row Lock)\")]\n        DoubleEntry --> DB_Entries[(\"ledger_entries Table (Immutable Journal)\")]\n        IdempEngine --> DB_Transfers[(\"transfers Table (Unique Idempotency Key)\")]\n    end\n```\n\n---\n\n## 🔄 Transaction Execution & Locking Sequence\n\nWhen Alice transfers money to Bob, circular-wait deadlocks are eliminated by enforcing a strict global lock acquisition order: $\\min(\\text{fromId}, \\text{toId})$ followed by $\\max(\\text{fromId}, \\text{toId})$.\n\n```mermaid\nsequenceDiagram\n    autonumber\n    actor Client\n    participant Controller as TransferController\n    participant Service as TransferService\n    participant DB as PostgreSQL (ACID)\n\n    Client->>Controller: POST /transfers (Idempotency-Key: uuid-123)\n    Controller->>Service: transfer(key, request)\n\n    Note over Service: 1. Fast Path Check\n    Service->>DB: SELECT * FROM transfers WHERE idempotency_key = 'uuid-123'\n    alt Key already committed\n        DB-->>Service: Existing Transfer Found\n        Service-->>Controller: Replay existing result\n        Controller-->>Client: HTTP 200 OK (Idempotent-Replayed: true)\n    else Key not found\n        Note over Service: 2. Deterministic Lock Ordering\n        Service->>DB: SELECT * FROM accounts WHERE id = min(A, B) FOR UPDATE\n        Service->>DB: SELECT * FROM accounts WHERE id = max(A, B) FOR UPDATE\n        \n        Note over Service: 3. Double-Checked Idempotency\n        Service->>DB: Re-check idempotency key under lock\n        \n        Note over Service: 4. Business Invariants\n        Service->>DB: Compute Balance = SUM(CREDIT) - SUM(DEBIT)\n        alt Insufficient Funds\n            Service-->>Controller: InsufficientFundsException (422)\n            Controller-->>Client: HTTP 422 Unprocessable Entity\n        else Balance Valid\n            Note over Service,DB: 5. Atomic Double-Entry Commit\n            Service->>DB: INSERT INTO transfers (key, journal_id, ...)\n            Service->>DB: INSERT INTO ledger_entries (journal_id, DEBIT, Alice)\n            Service->>DB: INSERT INTO ledger_entries (journal_id, CREDIT, Bob)\n            Note over DB: Transaction COMMITTED\n            Service-->>Controller: New Transfer Result\n            Controller-->>Client: HTTP 201 Created\n        end\n    end\n```\n\n---\n\n## 🔀 Transfer Lifecycle & Idempotency State Machine\n\n```mermaid\nstateDiagram-v2\n    [*] --> RequestReceived: Client dispatches POST /transfers\n    RequestReceived --> ExistingKeyCheck: Inspect Idempotency-Key Header\n    \n    ExistingKeyCheck --> VerifyPayload: Key Exists in DB\n    VerifyPayload --> SafeReplay: Same Payload (fromId, toId, amount)\n    SafeReplay --> [*]: Return HTTP 200 OK (Idempotent-Replayed: true)\n    \n    VerifyPayload --> KeyConflict: Different Payload\n    KeyConflict --> [*]: Return HTTP 409 Conflict\n\n    ExistingKeyCheck --> AcquirePessimisticLocks: New Idempotency Key\n    AcquirePessimisticLocks --> ValidateCurrencies: Lock min(A, B) then max(A, B)\n    \n    ValidateCurrencies --> CurrencyMismatchError: Currency A != Currency B\n    CurrencyMismatchError --> [*]: Return HTTP 422 Business Rule Violation\n    \n    ValidateCurrencies --> CheckAvailableBalance: Same Currency Verified\n    CheckAvailableBalance --> OverdraftError: Available < Transfer Amount\n    OverdraftError --> [*]: Return HTTP 422 Insufficient Funds\n    \n    CheckAvailableBalance --> PostDoubleEntry: Available >= Transfer Amount\n    PostDoubleEntry --> CommitTransaction: Generate Journal UUID, Insert DEBIT + CREDIT\n    CommitTransaction --> [*]: Return HTTP 201 Created\n```\n\n---\n\n## 🗄 Entity-Relationship Diagram (ERD)\n\n```mermaid\nerDiagram\n    ACCOUNTS ||--o{ TRANSFERS : \"sends (from_account_id)\"\n    ACCOUNTS ||--o{ TRANSFERS : \"receives (to_account_id)\"\n    ACCOUNTS ||--o{ LEDGER_ENTRIES : \"holds postings\"\n\n    ACCOUNTS {\n        bigserial id PK\n        varchar owner_name\n        varchar currency \"ISO code: USD, INR, EUR, GBP\"\n        timestamp created_at\n    }\n\n    TRANSFERS {\n        bigserial id PK\n        varchar idempotency_key UK \"Nullable, Unique\"\n        uuid journal_id UK \"Shared with Ledger Entries\"\n        bigint from_account_id FK\n        bigint to_account_id FK\n        bigint amount \"Minor units (cents, paise)\"\n        varchar currency\n        varchar status \"COMPLETED\"\n        timestamp created_at\n    }\n\n    LEDGER_ENTRIES {\n        bigserial id PK\n        uuid journal_id \"Indexed for reconciliation\"\n        bigint account_id FK \"Indexed for balance computation\"\n        varchar type \"CREDIT | DEBIT\"\n        bigint amount \"Minor units\"\n        timestamp created_at\n    }\n```\n\n---\n\n## ⚡ Core Engineering Highlights\n\n### 1. Double-Entry Accounting Invariant\nAccount balances are **never** stored as mutable columns (which are prone to race conditions, lost updates, and ledger drift). Instead, account balances are computed as the net sum of immutable historical ledger entries:\n\n$$\\text{Balance} = \\sum \\text{CREDITS} - \\sum \\text{DEBITS}$$\n\nEvery transfer or deposit operation writes two equal and opposite entries bound by a single immutable `journal_id`:\n1. `DEBIT` on the source account\n2. `CREDIT` on the destination account\n\nThe universal ledger invariant holds at all times across all currencies:\n\n$$\\sum_{\\text{all postings}} \\text{CREDITS} - \\sum_{\\text{all postings}} \\text{DEBITS} \\equiv 0$$\n\n### 2. Deadlock Prevention via Deterministic Lock Ordering\nWhen two users concurrently initiate bilateral transfers (Alice transfers \\$50 to Bob while Bob simultaneously transfers \\$30 to Alice), standard locking can cause a circular-wait deadlock:\n- **Thread 1:** Locks Account 1 (Alice), waits for Account 2 (Bob).\n- **Thread 2:** Locks Account 2 (Bob), waits for Account 1 (Alice).\n\n**Resolution:**\nThe system sorts account identifiers before acquiring database row locks:\n```java\nLong firstId = fromId < toId ? fromId : toId;\nLong secondId = fromId < toId ? toId : fromId;\n\nAccount first = accountRepository.findByIdForUpdate(firstId);\nAccount second = accountRepository.findByIdForUpdate(secondId);\n```\nBoth threads request locks in identical ascending numerical order (`#1` then `#2`), completely eliminating circular wait conditions at the database level.\n\n### 3. Distributed Idempotency Engine\nNetwork timeouts and client retries commonly cause duplicate financial transactions. This service implements the Stripe-standard `Idempotency-Key` protocol:\n- **First Request:** Generates and executes the transfer, committing the key and journal within a single transaction. Returns `HTTP 201 Created`.\n- **Replay with Same Key & Payload:** Identifies the existing completed key and returns the identical response with `HTTP 200 OK` and header `Idempotent-Replayed: true`. No duplicate debit occurs.\n- **Replay with Conflicting Payload:** If a previously committed key is reused with different accounts or amounts, the request is rejected immediately with `HTTP 409 Conflict`.\n- **Concurrent Race Resolution:** If two identical requests race simultaneously, PostgreSQL's `UNIQUE` constraint triggers a `DataIntegrityViolationException` on the losing transaction, which recovers safely in a clean transaction and returns the recorded replay.\n\n### 4. Multi-Currency Partitioning & Global Auditing\n- **Strict Currency Boundaries:** Accounts support `USD`, `INR`, `EUR`, and `GBP`. Transfers between mismatched currencies are blocked upfront with clear error responses.\n- **Isolated Continuous Reconciliation (`GET /reconciliation`):**\n  Auditing groups ledger entries per currency under `REPEATABLE_READ` snapshot isolation. It confirms:\n  1. Every currency's net sum independently equals zero ($\\Delta_{\\text{USD}} = 0, \\Delta_{\\text{INR}} = 0$).\n  2. Every journal transaction contains perfectly balanced debit and credit entries.\n  3. Every transfer corresponds to exactly two balanced ledger postings.\n\n---\n\n## 📡 REST API Specification\n\n### 1. Accounts\n| Method | Endpoint | Description |\n|---|---|---|\n| `POST` | `/accounts` | Create an account with an owner and ISO currency (`USD`, `INR`, `EUR`, `GBP`) |\n| `GET` | `/accounts` | List all active accounts (excluding system funding accounts) |\n| `GET` | `/accounts/{id}` | Fetch account metadata |\n| `GET` | `/accounts/{id}/balance` | Compute and return the real-time balance from ledger entries |\n| `POST` | `/accounts/{id}/deposit` | Deposit funds credited against the system funding pool (`SYSTEM_FUNDING`) |\n| `GET` | `/accounts/{id}/statement` | Fetch paginated statement with running balance computed point-in-time |\n\n#### Example: Create an Account\n```bash\ncurl -X POST http://localhost:8080/accounts \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"ownerName\": \"Alice Johnson\",\n    \"currency\": \"USD\"\n  }'\n```\n**Response (`201 Created`):**\n```json\n{\n  \"id\": 1,\n  \"ownerName\": \"Alice Johnson\",\n  \"currency\": \"USD\",\n  \"createdAt\": \"2026-11-15T09:30:00Z\"\n}\n```\n\n---\n\n### 2. Transfers\n| Method | Endpoint | Header Required | Description |\n|---|---|---|---|\n| `POST` | `/transfers` | `Idempotency-Key: <UUID>` | Execute an atomic double-entry transfer between accounts |\n| `POST` | `/transfers/{id}/reverse` | None | Post a compensating double-entry journal reversal (fails with 422 if funds spent or already reversed) |\n| `GET` | `/transfers` | None | List recent transfers (optional query parameter `?accountId=<ID>`) |\n| `GET` | `/transfers/{id}` | None | Fetch specific transfer record and current status (`COMPLETED` or `REVERSED`) |\n\n#### Example: Execute a Transfer\n```bash\ncurl -i -X POST http://localhost:8080/transfers \\\n  -H \"Content-Type: application/json\" \\\n  -H \"Idempotency-Key: 8a4b3c2d-1e0f-4a5b-9c8d-7e6f5a4b3c2d\" \\\n  -d '{\n    \"fromAccountId\": 1,\n    \"toAccountId\": 46,\n    \"amount\": 2500\n  }'\n```\n**First Dispatch (`201 Created`):**\n```json\n{\n  \"transferId\": 102,\n  \"journalId\": \"b1a2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d\",\n  \"fromAccountId\": 1,\n  \"toAccountId\": 46,\n  \"amount\": 2500,\n  \"currency\": \"USD\",\n  \"status\": \"COMPLETED\",\n  \"createdAt\": \"2026-11-15T09:35:10Z\"\n}\n```\n**Second Dispatch with Same Key (`200 OK` with Replay Header):**\n```http\nHTTP/1.1 200 OK\nIdempotent-Replayed: true\nContent-Type: application/json\n```\n\n#### Example: Reverse a Transfer via Compensating Journal\n```bash\ncurl -i -X POST http://localhost:8080/transfers/102/reverse\n```\n**Response (`200 OK`):**\n```json\n{\n  \"transferId\": 103,\n  \"journalId\": \"9c8b7a6d-5e4f-3a2b-1c0d-e2f3a4b5c6d7\",\n  \"fromAccountId\": 46,\n  \"toAccountId\": 1,\n  \"amount\": 2500,\n  \"currency\": \"USD\",\n  \"status\": \"COMPLETED\",\n  \"createdAt\": \"2026-11-15T09:36:00Z\"\n}\n```\n*Note: In double-entry accounting, reversals **never mutate or delete** past entries. The reversal issues a new compensating journal transaction (DEBIT recipient, CREDIT original sender). If the recipient has already spent the funds, the endpoint rejects with `422 Unprocessable Entity`.*\n\n---\n\n### 3. Reconciliation & Audit\n| Method | Endpoint | Description |\n|---|---|---|\n| `GET` | `/reconciliation` | Full audit report across all entries and currencies |\n\n#### Example: Audit Ledger Health\n```bash\ncurl -X GET http://localhost:8080/reconciliation\n```\n**Response (`200 OK`):**\n```json\n{\n  \"healthy\": true,\n  \"totalEntries\": 48,\n  \"netSumOfAllEntries\": 0,\n  \"netSumByCurrency\": {\n    \"USD\": 0,\n    \"INR\": 0,\n    \"EUR\": 0,\n    \"GBP\": 0\n  },\n  \"unbalancedJournals\": [],\n  \"transfersWithoutExactlyTwoEntries\": 0,\n  \"checkedAt\": \"2026-11-15T09:40:00Z\"\n}\n```\n\n---\n\n## 💻 Interactive Web Dashboard\n\nThe service bundles a modern, responsive single-page dashboard at `http://localhost:8080/index.html`:\n\n- **Interview Demo & Stress Lab:**\n  - **\"Send twice (Same Key) 🔁\":** Dispatches duplicate transfers with the same idempotency key, immediately rendering the `🔁 Idempotent-Replayed: true (HTTP 200)` badge and verifying zero duplicate deductions in 30 seconds.\n  - **\"Fire 20 transfers at once ⚡\":** Concurrently fires 20 transfer threads, tracks successful completions vs. prevented overdrafts, and executes an automated post-run reconciliation check to prove invariant balance preservation.\n  - **\"Simulate Overdraft (422) 🛑\":** One-click trigger attempting an overdraft, demonstrating clear HTTP 422 error banners and toasts.\n  - **\"Simulate Currency Mismatch (422) ⚠️\":** One-click trigger attempting a cross-currency transfer (e.g. USD to INR), demonstrating currency isolation.\n- **Transfer History & Reversals:** Dedicated transfer history table with one-click `Reverse ↩` buttons invoking `POST /transfers/{id}/reverse`.\n- **Active Wallet Selector:** Quick-switch between multi-currency accounts (`USD`, `INR`, `EUR`, `GBP`) with state preserved in `localStorage`.\n- **Live vs. Demo Simulator Toggle:** Switch seamlessly between real PostgreSQL REST API calls and an in-memory double-entry simulator.\n- **Dynamic Deposit / Add Funds:** Currency-aware presets (`+ $10`, `+ $50`, `+ ₹500`, etc.) matching the active account's currency.\n- **Audit Center:** Real-time multi-currency double-entry audit cards confirming ledger integrity across all currencies.\n\n---\n\n## 🚀 Getting Started & Local Setup\n\n### Prerequisites\n- **Java 17** or higher\n- **Docker** (for PostgreSQL) or a local PostgreSQL instance\n- **Maven 3.9+** (wrapper included)\n\n### 1. Start PostgreSQL Container\n```bash\ndocker run --name ledger-postgres \\\n  -e POSTGRES_DB=ledger \\\n  -e POSTGRES_USER=ledger \\\n  -e POSTGRES_PASSWORD=ledger \\\n  -p 5432:5432 \\\n  -d postgres:16-alpine\n```\n\n### 2. Configure Database & Flyway Migrations\nVerify `src/main/resources/application.yml`:\n```yaml\nspring:\n  datasource:\n    url: jdbc:postgresql://localhost:5432/ledger\n    username: ledger\n    password: ledger\n  flyway:\n    enabled: true\n    baseline-on-migrate: true\n    baseline-version: 0\n    locations: classpath:db/migration\n  jpa:\n    hibernate:\n      ddl-auto: validate\nserver:\n  port: 8080\n```\n> **Fintech Standard:** Database schema is strictly governed by versioned Flyway migrations (`V1__init_schema.sql`, `V2__allow_reversed_transfer_status.sql`). Hibernate runs with `ddl-auto: validate` so that application startup never modifies the production schema without a reviewed migration.\n\n### 3. Build & Run Application\n```bash\n# Clone the repository\ngit clone https://github.com/yashjangrra/wallet-ledger-service.git\ncd wallet-ledger-service\n\n# Run with Maven Wrapper\n./mvnw spring-boot:run\n```\n\n### 4. Access Interfaces\n- **Web Dashboard:** [http://localhost:8080/index.html](http://localhost:8080/index.html)\n- **OpenAPI / Swagger UI:** [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)\n- **Reconciliation Audit:** [http://localhost:8080/reconciliation](http://localhost:8080/reconciliation)\n\n---\n\n## 🧪 Comprehensive Verification & Test Suite\n\nThe project includes both multi-threaded concurrent race condition testing and full error-path integration testing:\n\n### 1. Run Error-Path Integration Tests (`HTTP 400, 404, 409, 422`)\n```bash\n./mvnw test -Dtest=ErrorPathIntegrationTest\n```\n**14 Automated Error-Path Scenarios Verified:**\n- `400 Bad Request`: Missing `Idempotency-Key` header, zero transfer amount, negative amount, blank owner name, negative deposit.\n- `404 Not Found`: Non-existent account balance lookup, deposit into missing account, missing source/destination account on transfer, non-existent transfer reversal.\n- `409 Conflict`: Idempotency key reused with a conflicting payload (mismatched accounts or amount).\n- `422 Unprocessable Entity`: Same-account transfer attempt, currency mismatch (`USD vs INR`), insufficient funds / overdraft attempt, reversing an already-reversed transfer, reversal when recipient has already spent funds.\n\n### 2. Run Concurrency & Stress Tests\n```bash\n./mvnw test -Dtest=ConcurrentTransferTest\n```\n- **Parallel Transfer Stress Test:** 20 concurrent threads attempting cross-transfers between accounts. Asserts zero deadlocks occur under high contention.\n- **Overdraft Protection Test:** Simultaneous withdrawal attempts that exceed account balance. Asserts that only valid transfers commit and final computed balance never drops below zero.\n- **Idempotency Key Race Test:** Concurrent requests firing the exact same idempotency key at the same millisecond. Asserts exactly one transaction commits and the other receives the safe replay.\n\n### 3. Run Entire Test Suite\n```bash\n./mvnw test\n```\n\n## 📄 License\nThis project is open-source and available under the [MIT License](LICENSE).\n";
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const originalRenderer = new marked.Renderer();
+      const originalCode = originalRenderer.code.bind(originalRenderer);
+      
+      const renderer = {
+        code(code, lang) {
+          let text = typeof code === 'object' ? code.text : code;
+          let language = typeof code === 'object' ? code.lang : lang;
+
+          if (language === 'mermaid') {
+            return '<div class="mermaid-wrapper"><div class="mermaid">' + text + '</div></div>';
+          }
+          if (typeof code === 'object') {
+            return originalCode(code.text, code.lang, code.escaped);
+          }
+          return originalCode(code, lang);
+        }
+      };
+
+      marked.use({ renderer });
+
+      // Parse markdown
+      document.getElementById('rendered-content').innerHTML = marked.parse(rawMarkdownData);
+
+      // Render KaTeX math
+      if (window.renderMathInElement) {
+        renderMathInElement(document.getElementById('rendered-content'), {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false }
+          ],
+          throwOnError: false
+        });
+      }
+
+      // Highlight syntax
+      if (window.hljs) {
+        hljs.highlightAll();
+      }
+
+      // Initialize and render Mermaid
+      if (window.mermaid) {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: 'default',
+          themeVariables: {
+            primaryColor: '#e0f2fe',
+            primaryTextColor: '#0369a1',
+            primaryBorderColor: '#0284c7',
+            lineColor: '#475569',
+            secondaryColor: '#f1f5f9',
+            tertiaryColor: '#ffffff'
+          },
+          flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' },
+          sequence: { useMaxWidth: true, showSequenceNumbers: true },
+          securityLevel: 'loose'
+        });
+
+        try {
+          await mermaid.run();
+        } catch (err) {
+          console.error('Mermaid render error:', err);
+        }
+      }
+
+      document.body.classList.add('ready-for-print');
+      document.title = 'READY_TO_PRINT';
+    });
+  </script>
+</body>
+</html>

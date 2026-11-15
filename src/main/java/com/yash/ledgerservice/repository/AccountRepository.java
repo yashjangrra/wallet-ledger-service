@@ -13,6 +13,8 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     Optional<Account> findFirstByOwnerNameAndCurrency(String ownerName, String currency);
 
+    java.util.List<Account> findByOwnerNameNotOrderByIdAsc(String ownerName);
+
     // Loads the account row AND locks it (SELECT ... FOR UPDATE) until the transaction ends.
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Account a where a.id = :id")

@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
+import java.util.List;
 
 @RestController
 @RequestMapping("/accounts")
@@ -23,6 +24,11 @@ public class AccountController {
     public AccountController(AccountService accountService, LedgerService ledgerService) {
         this.accountService = accountService;
         this.ledgerService = ledgerService;
+    }
+
+    @GetMapping
+    public List<AccountResponse> listAll() {
+        return accountService.listAll();
     }
 
     @PostMapping

@@ -8,10 +8,12 @@ import com.yash.ledgerservice.exception.AccountNotFoundException;
 import com.yash.ledgerservice.exception.BusinessRuleException;
 import com.yash.ledgerservice.exception.IdempotencyConflictException;
 import com.yash.ledgerservice.exception.InsufficientFundsException;
+import com.yash.ledgerservice.exception.TransferNotFoundException;
 import com.yash.ledgerservice.model.Account;
 import com.yash.ledgerservice.model.EntryType;
 import com.yash.ledgerservice.model.LedgerEntry;
 import com.yash.ledgerservice.model.Transfer;
+import com.yash.ledgerservice.model.TransferStatus;
 import com.yash.ledgerservice.repository.AccountRepository;
 import com.yash.ledgerservice.repository.LedgerEntryRepository;
 import com.yash.ledgerservice.repository.TransferRepository;
@@ -34,6 +36,66 @@ public class TransferService {
         this.accountRepository = accountRepository;
         this.ledgerEntryRepository = ledgerEntryRepository;
         this.transferRepository = transferRepository;
+    }
+
+    @Transactional
+    public TransferResponse reverse(Long transferId) {
+        Transfer original = transferRepository.findById(transferId)
+                .orElseThrow(() -> new TransferNotFoundException(transferId));
+
+        if (original.getStatus() == TransferStatus.REVERSED) {
+            throw new BusinessRuleException("Transfer #" + transferId + " has already been reversed");
+        }
+
+        Account originalSender = original.getFromAccount();
+        Account originalReceiver = original.getToAccount();
+        long amount = original.getAmount();
+
+        // Lock accounts in ascending ID order to prevent deadlocks
+        Long firstId = originalSender.getId() < originalReceiver.getId() ? originalSender.getId() : originalReceiver.getId();
+        Long secondId = originalSender.getId() < originalReceiver.getId() ? originalReceiver.getId() : originalSender.getId();
+        Account first = lockAccount(firstId);
+        Account second = lockAccount(secondId);
+
+        Account senderToCompensate = originalSender.getId().equals(firstId) ? first : second;
+        Account receiverToDeduct = originalReceiver.getId().equals(firstId) ? first : second;
+
+        // Double-check status under lock
+        Transfer lockedOriginal = transferRepository.findById(transferId)
+                .orElseThrow(() -> new TransferNotFoundException(transferId));
+        if (lockedOriginal.getStatus() == TransferStatus.REVERSED) {
+            throw new BusinessRuleException("Transfer #" + transferId + " has already been reversed");
+        }
+
+        // Verify receiver has sufficient funds to reverse (has not already spent the money)
+        long receiverBalance = ledgerEntryRepository.computeBalance(receiverToDeduct.getId());
+        if (receiverBalance < amount) {
+            throw new BusinessRuleException("Cannot reverse transfer #" + transferId +
+                    ": recipient account #" + receiverToDeduct.getId() +
+                    " has already spent the funds (available: " + receiverBalance + ", required: " + amount + ")");
+        }
+
+        // Mark original transfer as REVERSED
+        lockedOriginal.markReversed();
+        transferRepository.save(lockedOriginal);
+
+        // Post compensating double-entry journal (NEVER edits historical ledger entries)
+        UUID reversalJournalId = UUID.randomUUID();
+        String reversalKey = "rev-" + transferId + "-" + UUID.randomUUID().toString().substring(0, 8);
+
+        Transfer reversalTransfer = transferRepository.save(new Transfer(
+                reversalKey,
+                reversalJournalId,
+                receiverToDeduct,
+                senderToCompensate,
+                amount,
+                lockedOriginal.getCurrency()
+        ));
+
+        ledgerEntryRepository.save(new LedgerEntry(reversalJournalId, receiverToDeduct, EntryType.DEBIT, amount));
+        ledgerEntryRepository.save(new LedgerEntry(reversalJournalId, senderToCompensate, EntryType.CREDIT, amount));
+
+        return TransferResponse.from(reversalTransfer);
     }
 
     @Transactional
@@ -100,6 +162,20 @@ public class TransferService {
      * same key committed first, so we look up its result in a fresh transaction.
      */
     @Transactional(readOnly = true)
+    public java.util.List<TransferResponse> listTransfers(Long accountId) {
+        java.util.List<Transfer> list = (accountId != null)
+                ? transferRepository.findByFromAccountIdOrToAccountIdOrderByIdDesc(accountId, accountId)
+                : transferRepository.findTop50ByOrderByIdDesc();
+        return list.stream().map(TransferResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public TransferResponse getById(Long id) {
+        return transferRepository.findById(id)
+                .map(TransferResponse::from)
+                .orElseThrow(() -> new TransferNotFoundException(id));
+    }
+
     public Optional<TransferResult> findReplay(String idempotencyKey, TransferRequest request) {
         return transferRepository.findByIdempotencyKey(idempotencyKey)
                 .map(existing -> replay(existing, request));
