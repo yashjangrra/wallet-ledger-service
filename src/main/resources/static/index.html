@@ -848,15 +848,15 @@
 
       <!-- Right Controls: Demo/Live Toggle + Active Account -->
       <div class="header-right">
-        <button type="button" class="mode-switch" onclick="toggleApiMode()" title="Click to toggle between in-memory simulator and live Spring Boot API">
-          <span class="mode-dot" id="modeDot"></span>
-          <span id="modeText">Demo Mode</span>
-          <span class="mode-toggle-btn" id="modeToggleBtn">Switch to Live</span>
+        <button type="button" class="mode-switch" onclick="toggleApiMode()" title="Toggle Live Spring Boot API / Demo Simulator">
+          <span class="mode-dot live" id="modeDot"></span>
+          <span id="modeText">Live API (8080)</span>
+          <span class="mode-toggle-btn" id="modeToggleBtn">Switch to Demo</span>
         </button>
 
         <button class="active-account-chip" onclick="openAccountModal()" title="View or switch account">
           <span class="chip-avatar" id="headerAvatar">AJ</span>
-          <span id="headerAccountLabel">Account #2 · Alice</span>
+          <span id="headerAccountLabel">Account #1 · Alice Johnson</span>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m6 9 6 6 6-6"/></svg>
         </button>
       </div>
@@ -1529,15 +1529,12 @@
      * SERVICE LAYER & STATE MANAGEMENT
      * =========================================================================
      */
-    const isLocalServer = window.location.protocol.startsWith('http') && 
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-    const savedMode = localStorage.getItem('ledger_api_mode');
-    const initialDemoMode = savedMode !== null ? (savedMode === 'demo') : !isLocalServer;
+    const isHttp = window.location.protocol.startsWith('http');
+    const apiBase = isHttp ? window.location.origin : 'http://localhost:8080';
 
     const CONFIG = {
-      API_BASE_URL: isLocalServer ? window.location.origin : 'http://localhost:8080',
-      IS_DEMO_MODE: initialDemoMode
+      API_BASE_URL: apiBase,
+      IS_DEMO_MODE: false // Always default to Live API mode connected to Spring Boot backend
     };
 
     // In-Memory Simulated State for Demo Mode (matches exact Spring Boot schema)
@@ -3203,7 +3200,7 @@
     });
 
     // Initial Startup
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
       // Dynamic Date
       const d = new Date();
       document.getElementById('liveDateStr').textContent = d.toLocaleDateString('en-US', {
@@ -3213,29 +3210,40 @@
         year: 'numeric'
       });
 
-      // Initialize Mode Pill UI
+      // Verify connection to Live API
       const modeDot = document.getElementById('modeDot');
       const modeText = document.getElementById('modeText');
       const modeBtn = document.getElementById('modeToggleBtn');
-      if (CONFIG.IS_DEMO_MODE) {
+      const banner = document.getElementById('connectionBanner');
+
+      try {
+        const probe = await fetch(`${CONFIG.API_BASE_URL}/reconciliation`, { cache: 'no-cache' });
+        if (probe.ok) {
+          CONFIG.IS_DEMO_MODE = false;
+          localStorage.setItem('ledger_api_mode', 'live');
+          modeDot.classList.add('live');
+          modeText.textContent = `Live API (${window.location.port || '8080'})`;
+          modeBtn.textContent = 'Switch to Demo';
+          if (banner) banner.style.display = 'none';
+        } else {
+          throw new Error(`HTTP ${probe.status}`);
+        }
+      } catch (err) {
+        console.warn("Backend not reached, enabling offline simulator:", err);
+        CONFIG.IS_DEMO_MODE = true;
+        localStorage.setItem('ledger_api_mode', 'demo');
         modeDot.classList.remove('live');
-        modeText.textContent = 'Demo Mode';
+        modeText.textContent = 'Demo Mode (Offline)';
         modeBtn.textContent = 'Switch to Live';
-      } else {
-        modeDot.classList.add('live');
-        modeText.textContent = 'Live API (8080)';
-        modeBtn.textContent = 'Switch to Demo';
       }
 
-      (async () => {
-        const savedActiveId = localStorage.getItem('ledger_active_account_id');
-        if (savedActiveId && !isNaN(Number(savedActiveId))) {
-          currentAccountId = Number(savedActiveId);
-        }
-        await refreshActiveAccountDropdown();
-        await refreshOverview();
-        setupDepositTab();
-      })();
+      const savedActiveId = localStorage.getItem('ledger_active_account_id');
+      if (savedActiveId && !isNaN(Number(savedActiveId))) {
+        currentAccountId = Number(savedActiveId);
+      }
+      await refreshActiveAccountDropdown();
+      await refreshOverview();
+      setupDepositTab();
     });
   </script>
 </body>

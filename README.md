@@ -353,18 +353,21 @@ curl -X GET http://localhost:8080/reconciliation
 
 ## 💻 Interactive Web Dashboard
 
-The service bundles a modern, responsive single-page dashboard at `http://localhost:8080/index.html`:
+The service bundles a modern, responsive single-page web dashboard natively served by Spring Boot at `http://localhost:8080/index.html`:
 
-- **Interview Demo & Stress Lab:**
+- **Complete End-to-End REST Integration:**
+  - **Live Auto-Handshake:** Automatically probes the backend upon page load (`/reconciliation`), locking the interface into **Live API (8080)** mode with zero manual configuration.
+  - **Authoritative Account Synchronization:** Every dropdown (Active Wallet picker, Sender Account select, Deposit target) directly queries the PostgreSQL `/accounts` REST endpoint as the single source of truth, eliminating client-side drift or stale cached personas.
+  - **Dynamic Currency Adaptation:** The UI reactively formats labels, inputs, and presets to match the active account's currency (`USD: $`, `EUR: €`, `INR: ₹`, `GBP: £`).
+  - **Exposed Diagnostic Error Feedback:** Surfaces explicit backend error details (`err.detail`) directly in real-time toasts and inline alert cards instead of generic failure notices.
+- **Interview Demo & Stress Lab (1-Click Demonstrations):**
   - **"Send twice (Same Key) 🔁":** Dispatches duplicate transfers with the same idempotency key, immediately rendering the `🔁 Idempotent-Replayed: true (HTTP 200)` badge and verifying zero duplicate deductions in 30 seconds.
-  - **"Fire 20 transfers at once ⚡":** Concurrently fires 20 transfer threads, tracks successful completions vs. prevented overdrafts, and executes an automated post-run reconciliation check to prove invariant balance preservation.
+  - **"Fire 20 transfers at once ⚡":** Concurrently fires 20 transfer threads via `Promise.allSettled`, tracks successful completions vs. prevented overdrafts in real time, and executes an automated post-run reconciliation check to prove invariant balance preservation.
   - **"Simulate Overdraft (422) 🛑":** One-click trigger attempting an overdraft, demonstrating clear HTTP 422 error banners and toasts.
   - **"Simulate Currency Mismatch (422) ⚠️":** One-click trigger attempting a cross-currency transfer (e.g. USD to INR), demonstrating currency isolation.
-- **Transfer History & Reversals:** Dedicated transfer history table with one-click `Reverse ↩` buttons invoking `POST /transfers/{id}/reverse`.
-- **Active Wallet Selector:** Quick-switch between multi-currency accounts (`USD`, `INR`, `EUR`, `GBP`) with state preserved in `localStorage`.
-- **Live vs. Demo Simulator Toggle:** Switch seamlessly between real PostgreSQL REST API calls and an in-memory double-entry simulator.
-- **Dynamic Deposit / Add Funds:** Currency-aware presets (`+ $10`, `+ $50`, `+ ₹500`, etc.) matching the active account's currency.
-- **Audit Center:** Real-time multi-currency double-entry audit cards confirming ledger integrity across all currencies.
+- **Transfer History & Compensating Reversals:** Dedicated transfer history table with one-click `Reverse ↩` action invoking `POST /transfers/{id}/reverse`, writing compensating journals without mutating ledger history.
+- **Audit Center:** Real-time multi-currency double-entry audit cards confirming ledger integrity ($\sum \text{Debits} = \sum \text{Credits} = 0$) across all currencies.
+- **Offline Simulator Toggle:** Optional in-memory simulation mode allowing UI exploration even when the backend is disconnected.
 
 ---
 
@@ -376,6 +379,12 @@ The service bundles a modern, responsive single-page dashboard at `http://localh
 - **Maven 3.9+** (wrapper included)
 
 ### 1. Start PostgreSQL Container
+You can use the bundled `docker-compose.yml`:
+```bash
+# Start PostgreSQL database with Docker Compose
+docker compose up -d
+```
+*Alternatively, start manually with the Docker CLI:*
 ```bash
 docker run --name ledger-postgres \
   -e POSTGRES_DB=ledger \
