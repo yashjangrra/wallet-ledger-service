@@ -1,0 +1,12 @@
+target/
+.git/
+.gitignore
+.idea/
+*.iml
+*.log
+*.pdf
+dump*.html
+edge.log
+chrome.log
+generate-preview.js
+readme-preview.html

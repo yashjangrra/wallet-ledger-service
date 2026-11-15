@@ -373,28 +373,32 @@ The service bundles a modern, responsive single-page web dashboard natively serv
 
 ## 🚀 Getting Started & Local Setup
 
-### Prerequisites
-- **Java 17** or higher
-- **Docker** (for PostgreSQL) or a local PostgreSQL instance
-- **Maven 3.9+** (wrapper included)
+### Option A: 1-Command Full Stack (Docker Compose) 🐳
+The fastest way to run the entire system (PostgreSQL 16 + Spring Boot App + Flyway Migrations + Dashboard) with zero local installations:
 
-### 1. Start PostgreSQL Container
-You can use the bundled `docker-compose.yml`:
 ```bash
-# Start PostgreSQL database with Docker Compose
-docker compose up -d
+# Clone the repository
+git clone https://github.com/yashjangrra/wallet-ledger-service.git
+cd wallet-ledger-service
+
+# Build and start both PostgreSQL and Spring Boot containers
+docker compose up --build
 ```
-*Alternatively, start manually with the Docker CLI:*
+> **Container Highlights:**
+> - Multi-stage build using `eclipse-temurin:17-jre-alpine` (ultra-compact ~179MB image).
+> - Runs under an unprivileged user (`ledgeruser`) with container JVM memory constraints (`MaxRAMPercentage=75.0`).
+> - PostgreSQL healthcheck (`pg_isready`) prevents the application from starting until database connections are ready.
+
+---
+
+### Option B: Local IntelliJ IDEA Development
+
+#### 1. Start PostgreSQL Only
 ```bash
-docker run --name ledger-postgres \
-  -e POSTGRES_DB=ledger \
-  -e POSTGRES_USER=ledger \
-  -e POSTGRES_PASSWORD=ledger \
-  -p 5432:5432 \
-  -d postgres:16-alpine
+docker compose up -d postgres
 ```
 
-### 2. Configure Database & Flyway Migrations
+#### 2. Configure Database & Flyway Migrations
 Verify `src/main/resources/application.yml`:
 ```yaml
 spring:
@@ -415,19 +419,18 @@ server:
 ```
 > **Fintech Standard:** Database schema is strictly governed by versioned Flyway migrations (`V1__init_schema.sql`, `V2__allow_reversed_transfer_status.sql`). Hibernate runs with `ddl-auto: validate` so that application startup never modifies the production schema without a reviewed migration.
 
-### 3. Build & Run Application
+#### 3. Run Application
+Run `LedgerServiceApplication.java` in IntelliJ IDEA, or execute with the Maven Wrapper:
 ```bash
-# Clone the repository
-git clone https://github.com/yashjangrra/wallet-ledger-service.git
-cd wallet-ledger-service
-
-# Run with Maven Wrapper
 ./mvnw spring-boot:run
 ```
 
-### 4. Access Interfaces
+---
+
+### 🌐 Access Interfaces
 - **Web Dashboard:** [http://localhost:8080/index.html](http://localhost:8080/index.html)
 - **OpenAPI / Swagger UI:** [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
+- **Actuator Health Check:** [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
 - **Reconciliation Audit:** [http://localhost:8080/reconciliation](http://localhost:8080/reconciliation)
 
 ---
