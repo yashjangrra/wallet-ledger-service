@@ -3244,6 +3244,18 @@
       await refreshActiveAccountDropdown();
       await refreshOverview();
       setupDepositTab();
+
+      const initTab = (window.location.hash || '').replace('#', '') || (new URLSearchParams(window.location.search)).get('tab');
+      if (['overview', 'deposit', 'transfer', 'statement', 'reconciliation'].includes(initTab)) {
+        switchTab(initTab);
+      }
+
+      window.addEventListener('hashchange', () => {
+        const h = (window.location.hash || '').replace('#', '');
+        if (['overview', 'deposit', 'transfer', 'statement', 'reconciliation'].includes(h)) {
+          switchTab(h);
+        }
+      });
     });
   </script>
 </body>

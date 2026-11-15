@@ -11,6 +11,10 @@ A high-integrity, multi-currency financial wallet and ledger system engineered w
 
 Includes a built-in single-page web dashboard, live OpenAPI/Swagger documentation, and automated continuous reconciliation audit verification.
 
+<p align="center">
+  <img src="docs/screenshots/overview.png" alt="Wallet Ledger Service Dashboard" width="95%" />
+</p>
+
 ---
 
 ## 📑 Table of Contents
@@ -355,16 +359,45 @@ curl -X GET http://localhost:8080/reconciliation
 
 The service bundles a modern, responsive single-page web dashboard natively served by Spring Boot at `http://localhost:8080/index.html`:
 
+### Dashboard Previews & Core Views
+
+#### 1. Overview & Real-Time Balance
+Real-time computed wallet balance derived dynamically from immutable ledger debit and credit entries, quick action modals (Add Funds, Send Money), and real-time transaction history sorted newest-first.
+
+<p align="center">
+  <img src="docs/screenshots/overview.png" alt="Overview Dashboard" width="95%" />
+</p>
+
+#### 2. Transfer Interface & 1-Click Interview Stress Lab
+Enables instant demonstration of core distributed financial system guarantees in 30 seconds:
+* **Send twice (Same Key) 🔁:** Dispatches identical requests with the same idempotency key, immediately rendering the `🔁 Idempotent-Replayed: true (HTTP 200)` badge without double-charging.
+* **Fire 20 transfers at once ⚡:** Concurrently fires 20 transfer threads via `Promise.allSettled` to stress-test pessimistic row-locking (`PESSIMISTIC_WRITE`) and prove zero race conditions or double-spending.
+* **Simulate Overdraft (422) 🛑 & Currency Mismatch (422) ⚠️:** Surfaces clear, actionable error toasts and validation banners directly from backend RFC 7807 problem details.
+
+<p align="center">
+  <img src="docs/screenshots/transfer.png" alt="Transfer & Stress Lab" width="95%" />
+</p>
+
+#### 3. Account Statement & Running Balance Audit Trail
+An immutable audit journal displaying every posting with unique cryptographic journal UUIDs, precise timestamps, transaction types (`DEBIT` / `CREDIT`), and calculated per-line running balances.
+
+<p align="center">
+  <img src="docs/screenshots/statement.png" alt="Account Statement Audit Trail" width="95%" />
+</p>
+
+#### 4. Global Double-Entry Reconciliation & Health Audit
+Automated continuous verification checking that $\sum \text{Credits} - \sum \text{Debits} = 0$ partitioned across every active currency (`USD: $0.00`, `INR: ₹0.00`, `EUR: 0,00 €`), alongside zero unbalanced journals and zero broken transfer legs.
+
+<p align="center">
+  <img src="docs/screenshots/reconciliation.png" alt="Reconciliation Audit" width="95%" />
+</p>
+
+### Frontend Engineering Highlights
 - **Complete End-to-End REST Integration:**
   - **Live Auto-Handshake:** Automatically probes the backend upon page load (`/reconciliation`), locking the interface into **Live API (8080)** mode with zero manual configuration.
   - **Authoritative Account Synchronization:** Every dropdown (Active Wallet picker, Sender Account select, Deposit target) directly queries the PostgreSQL `/accounts` REST endpoint as the single source of truth, eliminating client-side drift or stale cached personas.
   - **Dynamic Currency Adaptation:** The UI reactively formats labels, inputs, and presets to match the active account's currency (`USD: $`, `EUR: €`, `INR: ₹`, `GBP: £`).
   - **Exposed Diagnostic Error Feedback:** Surfaces explicit backend error details (`err.detail`) directly in real-time toasts and inline alert cards instead of generic failure notices.
-- **Interview Demo & Stress Lab (1-Click Demonstrations):**
-  - **"Send twice (Same Key) 🔁":** Dispatches duplicate transfers with the same idempotency key, immediately rendering the `🔁 Idempotent-Replayed: true (HTTP 200)` badge and verifying zero duplicate deductions in 30 seconds.
-  - **"Fire 20 transfers at once ⚡":** Concurrently fires 20 transfer threads via `Promise.allSettled`, tracks successful completions vs. prevented overdrafts in real time, and executes an automated post-run reconciliation check to prove invariant balance preservation.
-  - **"Simulate Overdraft (422) 🛑":** One-click trigger attempting an overdraft, demonstrating clear HTTP 422 error banners and toasts.
-  - **"Simulate Currency Mismatch (422) ⚠️":** One-click trigger attempting a cross-currency transfer (e.g. USD to INR), demonstrating currency isolation.
 - **Transfer History & Compensating Reversals:** Dedicated transfer history table with one-click `Reverse ↩` action invoking `POST /transfers/{id}/reverse`, writing compensating journals without mutating ledger history.
 - **Audit Center:** Real-time multi-currency double-entry audit cards confirming ledger integrity ($\sum \text{Debits} = \sum \text{Credits} = 0$) across all currencies.
 - **Offline Simulator Toggle:** Optional in-memory simulation mode allowing UI exploration even when the backend is disconnected.
